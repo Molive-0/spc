@@ -1,4 +1,4 @@
-use super::binary_reader::{BinaryRead, BinaryReader, ReadAll};
+use super::binary_reader::{BinaryRead, BinaryReader};
 use std::char;
 use std::fs::File;
 use std::io::{BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom};
@@ -41,8 +41,8 @@ impl Spc {
         let mut r = BinaryReader::new(reader);
 
         let mut header = [0; HEADER_LEN];
-        r.read_all(&mut header)?;
-        if header.iter().zip(HEADER_BYTES.iter()).any(|(x, y)| x != y) {
+        r.read_exact(&mut header)?;
+        if header != *HEADER_BYTES {
             fail!("Invalid header string");
         }
 
@@ -65,25 +65,21 @@ impl Spc {
         let psw = r.read_u8()?;
         let sp = r.read_u8()?;
 
-        let id666_tag = match has_id666_tag {
-            true => {
-                r.seek(SeekFrom::Start(0x2e))?;
-                match Id666Tag::load(&mut r) {
-                    Ok(x) => Some(x),
-                    Err(e) => fail!(format!("Invalid ID666 tag: {}", e)),
-                }
-            }
-            false => None,
+        let id666_tag = if has_id666_tag {
+            r.seek(SeekFrom::Start(0x2e))?;
+            Id666Tag::load(&mut r).map_err(|Err(e)| fail!(format!("Invalid ID666 tag: {}", e)))?
+        } else {
+            None
         };
 
         r.seek(SeekFrom::Start(0x100))?;
         let mut ram = [0; RAM_LEN];
-        r.read_all(&mut ram)?;
+        r.read_exact(&mut ram)?;
         let mut regs = [0; REG_LEN];
-        r.read_all(&mut regs)?;
+        r.read_exact(&mut regs)?;
         r.seek(SeekFrom::Start(0x101c0))?;
         let mut ipl_rom = [0; IPL_ROM_LEN];
-        r.read_all(&mut ipl_rom)?;
+        r.read_exact(&mut ipl_rom)?;
 
         Ok(Spc {
             version_minor,
@@ -138,13 +134,13 @@ impl Id666Tag {
         //  seems to work on all of the .spc's I've tried is to just check if there
         //  appears to be textual data where the length and/or date fields should be.
         //  Still pretty icky, but it works pretty well.
-        r.seek(SeekFrom::Start(0x9e))?;
-        let is_text_format = match Id666Tag::is_text_region(r, 11)? {
-            true => {
-                r.seek(SeekFrom::Start(0xa9))?;
-                Id666Tag::is_text_region(r, 3)?
-            }
-            _ => false,
+
+        let is_text_format = {
+            r.seek(SeekFrom::Start(0x9e))?;
+            Id666Tag::is_text_region(r, 11)?
+        } && {
+            r.seek(SeekFrom::Start(0xa9))?;
+            Id666Tag::is_text_region(r, 3)?
         };
 
         r.seek(SeekFrom::Start(0x9e))?;
@@ -161,19 +157,21 @@ impl Id666Tag {
             )
         } else {
             // TODO: Find SPC's to test this with
-            unimplemented!();
-
-            /*let year = try!(r.read_le_u16());
-            let month = try!(r.read_u8());
-            let day = try!(r.read_u8());
+            let year = r.read_le_u16()?;
+            let month = r.read_u8()?;
+            let day = r.read_u8()?;
             let date_dumped = format!("{}/{}/{}", month, day, year);
 
-            try!(r.seek(SeekFrom::Start(0xa9)));
-            let seconds_to_play_before_fading_out = try!(r.read_le_u16());
-            try!(r.read_u8());
-            let fade_out_length = try!(r.read_le_i32());
+            r.seek(SeekFrom::Start(0xa9))?;
+            let seconds_to_play_before_fading_out = r.read_le_u16()?;
+            r.read_u8()?;
+            let fade_out_length = r.read_le_i32()?;
 
-            (date_dumped, seconds_to_play_before_fading_out, fade_out_length)*/
+            (
+                date_dumped,
+                seconds_to_play_before_fading_out,
+                fade_out_length,
+            )
         };
 
         let artist_name = Id666Tag::read_string(r, 32)?;

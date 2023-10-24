@@ -1,10 +1,6 @@
 use std::io::{Error, ErrorKind, Read, Result, Seek, SeekFrom};
 
-pub trait ReadAll: Read {
-    fn read_all(&mut self, buf: &mut [u8]) -> Result<()>;
-}
-
-pub trait BinaryRead: ReadAll {
+pub trait BinaryRead: Read {
     fn read_u8(&mut self) -> Result<u8>;
     fn read_le_u16(&mut self) -> Result<u16>;
     fn read_le_i32(&mut self) -> Result<i32>;
