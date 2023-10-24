@@ -13,7 +13,7 @@ pub const REG_LEN: usize = 128;
 pub const IPL_ROM_LEN: usize = 64;
 
 const HEADER_LEN: usize = 33;
-const HEADER_BYTES: &'static [u8; HEADER_LEN] =
+const HEADER_BYTES: &[u8; HEADER_LEN] =
     b"SNES-SPC700 Sound File Data v0.30";
 
 pub struct Spc {
@@ -85,17 +85,17 @@ impl Spc {
         r#try!(r.read_all(&mut ipl_rom));
 
         Ok(Spc {
-            version_minor: version_minor,
-            pc: pc,
-            a: a,
-            x: x,
-            y: y,
-            psw: psw,
-            sp: sp,
-            id666_tag: id666_tag,
-            ram: ram,
-            regs: regs,
-            ipl_rom: ipl_rom
+            version_minor,
+            pc,
+            a,
+            x,
+            y,
+            psw,
+            sp,
+            id666_tag,
+            ram,
+            regs,
+            ipl_rom
         })
     }
 }
@@ -183,16 +183,16 @@ impl Id666Tag {
         };
 
         Ok(Id666Tag {
-            song_title: song_title,
-            game_title: game_title,
-            dumper_name: dumper_name,
-            comments: comments,
-            date_dumped: date_dumped,
-            seconds_to_play_before_fading_out: seconds_to_play_before_fading_out,
-            fade_out_length: fade_out_length,
-            artist_name: artist_name,
-            default_channel_disables: default_channel_disables,
-            dumping_emulator: dumping_emulator
+            song_title,
+            game_title,
+            dumper_name,
+            comments,
+            date_dumped,
+            seconds_to_play_before_fading_out,
+            fade_out_length,
+            artist_name,
+            default_channel_disables,
+            dumping_emulator
         })
     }
 
@@ -218,7 +218,7 @@ impl Id666Tag {
             let b = r#try!(r.read_u8());
             if b != 0 {
                 if let Some(c) = char::from_u32(b as u32) {
-                    if !c.is_digit(10) && c != '/' {
+                    if !c.is_ascii_digit() && c != '/' {
                         return Ok(false);
                     }
                 }
@@ -234,7 +234,7 @@ impl Id666Tag {
 
     fn digit(d: u8) -> Result<i32> {
         match char::from_u32(d as u32) {
-            Some(c) if c.is_digit(10) => Ok(c.to_digit(10).unwrap() as i32),
+            Some(c) if c.is_ascii_digit() => Ok(c.to_digit(10).unwrap() as i32),
             _ => fail!("Expected numeric value")
         }
     }

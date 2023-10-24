@@ -16,7 +16,7 @@ pub struct BinaryReader<R> {
 
 impl<R: Read> BinaryReader<R> {
     pub fn new(inner: R) -> BinaryReader<R> {
-        BinaryReader { inner: inner }
+        BinaryReader { inner }
     }
 }
 
