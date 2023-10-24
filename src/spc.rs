@@ -65,12 +65,15 @@ impl Spc {
         let psw = r.read_u8()?;
         let sp = r.read_u8()?;
 
-        let id666_tag = if has_id666_tag {
-            r.seek(SeekFrom::Start(0x2e))?;
-            Id666Tag::load(&mut r).map_err(|Err(e)| fail!(format!("Invalid ID666 tag: {}", e)))?
-        } else {
-            None
-        };
+        let id666_tag =
+            if has_id666_tag {
+                r.seek(SeekFrom::Start(0x2e))?;
+                Some(Id666Tag::load(&mut r).map_err(|e| {
+                    Error::new(ErrorKind::Other, format!("Invalid ID666 tag: {}", e))
+                })?)
+            } else {
+                None
+            };
 
         r.seek(SeekFrom::Start(0x100))?;
         let mut ram = [0; RAM_LEN];
@@ -169,7 +172,7 @@ impl Id666Tag {
 
             (
                 date_dumped,
-                seconds_to_play_before_fading_out,
+                seconds_to_play_before_fading_out as i32,
                 fade_out_length,
             )
         };
