@@ -1,11 +1,13 @@
+use super::binary_reader::{BinaryRead, BinaryReader, ReadAll};
 use std::char;
-use std::io::{Read, Result, Error, ErrorKind, Seek, SeekFrom, BufReader};
-use std::path::Path;
 use std::fs::File;
-use super::binary_reader::{ReadAll, BinaryRead, BinaryReader};
+use std::io::{BufReader, Error, ErrorKind, Read, Result, Seek, SeekFrom};
+use std::path::Path;
 
 macro_rules! fail {
-    ($expr:expr) => (return Err(Error::new(ErrorKind::Other, $expr)))
+    ($expr:expr) => {
+        return Err(Error::new(ErrorKind::Other, $expr))
+    };
 }
 
 pub const RAM_LEN: usize = 0x10000;
@@ -13,8 +15,7 @@ pub const REG_LEN: usize = 128;
 pub const IPL_ROM_LEN: usize = 64;
 
 const HEADER_LEN: usize = 33;
-const HEADER_BYTES: &[u8; HEADER_LEN] =
-    b"SNES-SPC700 Sound File Data v0.30";
+const HEADER_BYTES: &[u8; HEADER_LEN] = b"SNES-SPC700 Sound File Data v0.30";
 
 pub struct Spc {
     pub version_minor: u8,
@@ -27,12 +28,12 @@ pub struct Spc {
     pub id666_tag: Option<Id666Tag>,
     pub ram: [u8; RAM_LEN],
     pub regs: [u8; REG_LEN],
-    pub ipl_rom: [u8; IPL_ROM_LEN]
+    pub ipl_rom: [u8; IPL_ROM_LEN],
 }
 
 impl Spc {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Spc> {
-        let file = r#try!(File::open(path));
+        let file = File::open(path)?;
         Spc::from_reader(BufReader::new(file))
     }
 
@@ -40,49 +41,49 @@ impl Spc {
         let mut r = BinaryReader::new(reader);
 
         let mut header = [0; HEADER_LEN];
-        r#try!(r.read_all(&mut header));
+        r.read_all(&mut header)?;
         if header.iter().zip(HEADER_BYTES.iter()).any(|(x, y)| x != y) {
             fail!("Invalid header string");
         }
 
-        if r#try!(r.read_le_u16()) != 0x1a1a {
+        if r.read_le_u16()? != 0x1a1a {
             fail!("Invalid padding bytes");
         }
 
-        let has_id666_tag = match r#try!(r.read_u8()) {
+        let has_id666_tag = match r.read_u8()? {
             0x1a => true,
             0x1b => false,
-            _ => fail!("Unable to determine if file contains ID666 tag")
+            _ => fail!("Unable to determine if file contains ID666 tag"),
         };
 
-        let version_minor = r#try!(r.read_u8());
+        let version_minor = r.read_u8()?;
 
-        let pc = r#try!(r.read_le_u16());
-        let a = r#try!(r.read_u8());
-        let x = r#try!(r.read_u8());
-        let y = r#try!(r.read_u8());
-        let psw = r#try!(r.read_u8());
-        let sp = r#try!(r.read_u8());
+        let pc = r.read_le_u16()?;
+        let a = r.read_u8()?;
+        let x = r.read_u8()?;
+        let y = r.read_u8()?;
+        let psw = r.read_u8()?;
+        let sp = r.read_u8()?;
 
         let id666_tag = match has_id666_tag {
             true => {
-                r#try!(r.seek(SeekFrom::Start(0x2e)));
+                r.seek(SeekFrom::Start(0x2e))?;
                 match Id666Tag::load(&mut r) {
                     Ok(x) => Some(x),
-                    Err(e) => fail!(format!("Invalid ID666 tag: {}", e))
+                    Err(e) => fail!(format!("Invalid ID666 tag: {}", e)),
                 }
-            },
-            false => None
+            }
+            false => None,
         };
 
-        r#try!(r.seek(SeekFrom::Start(0x100)));
+        r.seek(SeekFrom::Start(0x100))?;
         let mut ram = [0; RAM_LEN];
-        r#try!(r.read_all(&mut ram));
+        r.read_all(&mut ram)?;
         let mut regs = [0; REG_LEN];
-        r#try!(r.read_all(&mut regs));
-        r#try!(r.seek(SeekFrom::Start(0x101c0)));
+        r.read_all(&mut regs)?;
+        r.seek(SeekFrom::Start(0x101c0))?;
         let mut ipl_rom = [0; IPL_ROM_LEN];
-        r#try!(r.read_all(&mut ipl_rom));
+        r.read_all(&mut ipl_rom)?;
 
         Ok(Spc {
             version_minor,
@@ -95,7 +96,7 @@ impl Spc {
             id666_tag,
             ram,
             regs,
-            ipl_rom
+            ipl_rom,
         })
     }
 }
@@ -110,21 +111,21 @@ pub struct Id666Tag {
     pub fade_out_length: i32,
     pub artist_name: String,
     pub default_channel_disables: u8,
-    pub dumping_emulator: Emulator
+    pub dumping_emulator: Emulator,
 }
 
 pub enum Emulator {
     Unknown,
     ZSnes,
-    Snes9x
+    Snes9x,
 }
 
 impl Id666Tag {
     fn load<R: BinaryRead + Seek>(r: &mut R) -> Result<Id666Tag> {
-        let song_title = r#try!(Id666Tag::read_string(r, 32));
-        let game_title = r#try!(Id666Tag::read_string(r, 32));
-        let dumper_name = r#try!(Id666Tag::read_string(r, 16));
-        let comments = r#try!(Id666Tag::read_string(r, 32));
+        let song_title = Id666Tag::read_string(r, 32)?;
+        let game_title = Id666Tag::read_string(r, 32)?;
+        let dumper_name = Id666Tag::read_string(r, 16)?;
+        let comments = Id666Tag::read_string(r, 32)?;
 
         // So, apparently, there's really no reliable way to detect whether or not
         //  an id666 tag is in text or binary format. I tried using the date field,
@@ -137,49 +138,52 @@ impl Id666Tag {
         //  seems to work on all of the .spc's I've tried is to just check if there
         //  appears to be textual data where the length and/or date fields should be.
         //  Still pretty icky, but it works pretty well.
-        r#try!(r.seek(SeekFrom::Start(0x9e)));
-        let is_text_format = match r#try!(Id666Tag::is_text_region(r, 11)) {
+        r.seek(SeekFrom::Start(0x9e))?;
+        let is_text_format = match Id666Tag::is_text_region(r, 11)? {
             true => {
-                r#try!(r.seek(SeekFrom::Start(0xa9)));
-                r#try!(Id666Tag::is_text_region(r, 3))
-            },
-            _ => false
+                r.seek(SeekFrom::Start(0xa9))?;
+                Id666Tag::is_text_region(r, 3)?
+            }
+            _ => false,
         };
 
-        r#try!(r.seek(SeekFrom::Start(0x9e)));
+        r.seek(SeekFrom::Start(0x9e))?;
 
-        let (date_dumped, seconds_to_play_before_fading_out, fade_out_length) =
-            if is_text_format {
-                let date_dumped = r#try!(Id666Tag::read_string(r, 11));
-                let seconds_to_play_before_fading_out = r#try!(Id666Tag::read_number(r, 3));
-                let fade_out_length = r#try!(Id666Tag::read_number(r, 5));
+        let (date_dumped, seconds_to_play_before_fading_out, fade_out_length) = if is_text_format {
+            let date_dumped = Id666Tag::read_string(r, 11)?;
+            let seconds_to_play_before_fading_out = Id666Tag::read_number(r, 3)?;
+            let fade_out_length = Id666Tag::read_number(r, 5)?;
 
-                (date_dumped, seconds_to_play_before_fading_out, fade_out_length)
-            } else {
-                // TODO: Find SPC's to test this with
-                unimplemented!();
+            (
+                date_dumped,
+                seconds_to_play_before_fading_out,
+                fade_out_length,
+            )
+        } else {
+            // TODO: Find SPC's to test this with
+            unimplemented!();
 
-                /*let year = try!(r.read_le_u16());
-                let month = try!(r.read_u8());
-                let day = try!(r.read_u8());
-                let date_dumped = format!("{}/{}/{}", month, day, year);
+            /*let year = try!(r.read_le_u16());
+            let month = try!(r.read_u8());
+            let day = try!(r.read_u8());
+            let date_dumped = format!("{}/{}/{}", month, day, year);
 
-                try!(r.seek(SeekFrom::Start(0xa9)));
-                let seconds_to_play_before_fading_out = try!(r.read_le_u16());
-                try!(r.read_u8());
-                let fade_out_length = try!(r.read_le_i32());
+            try!(r.seek(SeekFrom::Start(0xa9)));
+            let seconds_to_play_before_fading_out = try!(r.read_le_u16());
+            try!(r.read_u8());
+            let fade_out_length = try!(r.read_le_i32());
 
-                (date_dumped, seconds_to_play_before_fading_out, fade_out_length)*/
-            };
+            (date_dumped, seconds_to_play_before_fading_out, fade_out_length)*/
+        };
 
-        let artist_name = r#try!(Id666Tag::read_string(r, 32));
+        let artist_name = Id666Tag::read_string(r, 32)?;
 
-        let default_channel_disables = r#try!(r.read_u8());
+        let default_channel_disables = r.read_u8()?;
 
         let dumping_emulator = match Id666Tag::read_digit(r) {
             Ok(1) => Emulator::ZSnes,
             Ok(2) => Emulator::Snes9x,
-            _ => Emulator::Unknown
+            _ => Emulator::Unknown,
         };
 
         Ok(Id666Tag {
@@ -192,7 +196,7 @@ impl Id666Tag {
             fade_out_length,
             artist_name,
             default_channel_disables,
-            dumping_emulator
+            dumping_emulator,
         })
     }
 
@@ -201,11 +205,11 @@ impl Id666Tag {
         let mut ret = "".to_string();
         let mut has_ended = false;
         for _ in 0..max_len {
-            let b = r#try!(r.read_u8());
+            let b = r.read_u8()?;
             if !has_ended {
                 match char::from_u32(b as u32) {
                     Some(c) if b != 0 => ret.push(c),
-                    _ => has_ended = true
+                    _ => has_ended = true,
                 }
             }
         }
@@ -215,7 +219,7 @@ impl Id666Tag {
     fn is_text_region<R: BinaryRead>(r: &mut R, len: i32) -> Result<bool> {
         // TODO: This code is probably shit
         for _ in 0..len {
-            let b = r#try!(r.read_u8());
+            let b = r.read_u8()?;
             if b != 0 {
                 if let Some(c) = char::from_u32(b as u32) {
                     if !c.is_ascii_digit() && c != '/' {
@@ -228,26 +232,26 @@ impl Id666Tag {
     }
 
     fn read_digit<R: BinaryRead>(r: &mut R) -> Result<i32> {
-        let d = r#try!(r.read_u8());
+        let d = r.read_u8()?;
         Id666Tag::digit(d)
     }
 
     fn digit(d: u8) -> Result<i32> {
         match char::from_u32(d as u32) {
             Some(c) if c.is_ascii_digit() => Ok(c.to_digit(10).unwrap() as i32),
-            _ => fail!("Expected numeric value")
+            _ => fail!("Expected numeric value"),
         }
     }
 
     fn read_number<R: BinaryRead>(r: &mut R, max_len: i32) -> Result<i32> {
         let mut ret = 0;
         for _ in 0..max_len {
-        let d = r#try!(r.read_u8());
+            let d = r.read_u8()?;
             if d == 0 {
                 break;
             }
             ret *= 10;
-            ret += r#try!(Id666Tag::digit(d));
+            ret += Id666Tag::digit(d)?;
         }
         Ok(ret)
     }

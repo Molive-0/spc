@@ -7,4 +7,4 @@ homepage = "https://github.com/emu-rs/spc"
 repository = "https://github.com/emu-rs/spc"
 keywords = ["spc", "snes", "super", "nintendo", "music"]
 license = "BSD-2-Clause"
-edition = "2015"
+edition = "2021"
